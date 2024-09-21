@@ -13,8 +13,12 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
-#include <TFile.h>
+#include <TAxis.h>
+#include <TCanvas.h>
 #include <TGraph.h>
+#include <TH1.h>
+#include <TRint.h>
+#include <TStyle.h>
 
 using boost::program_options::options_description;
 using boost::program_options::value;
@@ -48,6 +52,11 @@ std::vector < std::vector<std::string> > ParseCsv(const std::string &filepath)
 
 int main(int argc,char *argv[])
 {
+  /* ROOT initialization */
+  int tmp=1;
+  TApplication theApp("App",&tmp,argv);
+  gStyle->SetOptStat(0);
+
   /*
    * Command line option
    */
@@ -55,7 +64,7 @@ int main(int argc,char *argv[])
   // define format
   opt.add_options()
   ("help,h", "display help")
-  ("ini,i",  value<std::string>(), "ini file");
+  ("input,i",  value<std::string>(), "input csv file");
 
   // analyze command line
   variables_map argmap;
@@ -63,82 +72,105 @@ int main(int argc,char *argv[])
   notify(argmap);
 
   // if no matching option, show help
-  if (argmap.count("help") || !argmap.count("ini"))
+  if (argmap.count("help") || !argmap.count("input"))
     {
       std::cerr << opt << std::endl;
       return 1;
     }
 
-  const std::string ini = argmap["ini"].as<std::string>();
+  const std::string sinput = argmap["input"].as<std::string>();
 
-  boost::property_tree::ptree pt;
-  try
+  static boost::posix_time::ptime epoch(boost::gregorian::date(1970,  1,  1));
+  static boost::posix_time::ptime day0( boost::gregorian::date(2024, 10,  9));
+  static boost::posix_time::ptime day1( boost::gregorian::date(2024, 10, 21));
+  static boost::posix_time::ptime day2( boost::gregorian::date(2024, 11, 29));
+  static boost::posix_time::ptime day3( boost::gregorian::date(2024, 12, 27));
+
+  const auto cells = ParseCsv(sinput);
+
+  std::vector<double> vsler, viler;
+  std::vector<double> vsher, viher;
+  std::vector<double> vlumh, vluml;
+
+  const auto her2ler = 1.83/2.58;
+  const auto Lsph    = 5.0e+31 * 1.0e+6 / (1.0e+34);
+  const auto Lspl    = 4.0e+31 * 1.0e+6 / (1.0e+34);
+  const auto nb2346  = 2346.;
+  const auto nb393   =  393.;
+
+  for (const auto& data : cells)
     {
-      boost::property_tree::read_ini(ini.c_str(), pt);
-    }
-  catch (boost::property_tree::ptree_error& e)
-    {
-      std::cout << "ptree_error " << e.what() << std::endl;
-      exit(-1);
-    }
+      assert(data.size()==2 && "data's column size should be 2.");
 
-  std::vector<std::string> sINI = {pt.get<std::string>("PV.RATE"), pt.get<std::string>("PV.CURRENT"), pt.get<std::string>("PV.CHARGE1"), pt.get<std::string>("PV.EFFICIENCY")};
+      auto *formatd = new boost::posix_time::time_input_facet("%Y-%m-%d");
+      boost::posix_time::ptime ptimed;
 
-  auto fout = boost::shared_ptr<TFile>(new TFile("analysis01.root", "recreate"));
+      const double iler = boost::lexical_cast<double>(data[0]);
+      const double iher = iler * her2ler;
 
-  static boost::posix_time::ptime epoch(boost::gregorian::date(1970, 1, 1));
+      std::istringstream iss(data[1]);
+      iss.imbue(std::locale(iss.getloc(), formatd));
+      iss >> ptimed;
+      delete formatd;
 
-  /* Search for EPICS PV csv files */
-  for (auto &INI: sINI)
-    {
-      const int it = &INI - &sINI[0];
+      auto to_time_t = [](const boost::posix_time::ptime &date)
+                       {
+                         return time_t((date - epoch).total_seconds());
+                       };
+      const auto sec = boost::lexical_cast<double>(to_time_t(ptimed) - 788918400);
 
-      boost::filesystem::path pd(INI);
+      vsler.push_back(sec);  // ref to 1 Jan, 1995
+      viler.push_back(iler);
 
-      /* Process good files only */
-      if (boost::filesystem::exists(pd) && boost::filesystem::file_size(pd) > 1000 && pd.extension() == ".csv")
+      // Collision starts on Day 1
+      if (ptimed > day1)
         {
-          const auto cells = ParseCsv(pd.string());
+          vsher.push_back(sec);
+          viher.push_back(iher);
 
-          std::vector<double> vsec;
-          std::vector<double> vval;
-
-          for (const auto& data : cells)
+          // Filling scheme
+          if (iler < 1.4)
             {
-              assert(data.size()==2 && "data's column size should be 2.");
-              if (it > 1 && data[1] == "0")
-                continue;
-
-              auto *formatd = new boost::posix_time::time_input_facet("%Y/%m/%d %H:%M:%s.%f");
-              boost::posix_time::ptime ptimed;
-
-              std::istringstream iss(data[0]);
-              iss.imbue(std::locale(iss.getloc(), formatd));
-              iss >> ptimed;
-              delete formatd;
-
-              auto to_time_t = [](const boost::posix_time::ptime &date)
-                               {
-                                 return time_t((date - epoch).total_seconds());
-                               };
-
-              vsec.push_back(boost::lexical_cast<double>(to_time_t(ptimed) - 788918400)); // ref to 1 Jan, 1995
-              vval.push_back(boost::lexical_cast<double>(data[1]));
+        	  vlumh.push_back(iler/nb393  * iher/nb393  * Lsph * nb393);
+              vluml.push_back(iler/nb393  * iher/nb393  * Lspl * nb393);
             }
-
-          std::cout << "Loaded " << pd.stem().string() << std::endl;
-          auto gr = boost::shared_ptr<TGraph>(new TGraph(vsec.size(), &vsec[0], &vval[0]));
-          gr->SetName(pd.stem().string().c_str());
-          gr->SetTitle(pd.stem().string().c_str());
-          gr->SetMarkerStyle(20+it);
-          gr->SetMarkerColor(1+it);
-          gr->SetLineColor(1+it);
-          gr->Write();
+          else
+            {
+              vlumh.push_back(iler/nb2346 * iher/nb2346 * Lsph * nb2346);
+              vluml.push_back(iler/nb2346 * iher/nb2346 * Lspl * nb2346);
+            }
         }
     }
 
-  fout->Write();
-  fout->Close();
+  TCanvas *c0 = new TCanvas("c0", "c0", 1000, 500);
+  c0->cd();
 
+  auto giler = boost::shared_ptr<TGraph>(new TGraph(vsler.size(), &vsler[0], &viler[0]));
+  giler->SetName("");
+  giler->SetTitle("2024C");
+  giler->SetMarkerStyle(24);
+  giler->SetMarkerColor(2);
+  giler->SetLineColor(2);
+  giler->Draw("AP");
+  giler->GetHistogram()->SetMinimum( 0.);
+  giler->GetHistogram()->SetMaximum(11.);
+  giler->GetXaxis()->SetTimeDisplay(1);
+  giler->GetXaxis()->SetTimeFormat("%b %d");
+
+  auto giher = boost::shared_ptr<TGraph>(new TGraph(vsher.size(), &vsher[0], &viher[0]));
+  giher->SetMarkerStyle(24);
+  giher->SetMarkerColor(4);
+  giher->SetLineColor(4);
+  giher->Draw("P,same");
+
+  auto glumh = boost::shared_ptr<TGraph>(new TGraph(vsher.size(), &vsher[0], &vlumh[0]));
+  glumh->SetMarkerStyle(24);
+  glumh->SetMarkerColor(4);
+  glumh->SetLineColor(4);
+  glumh->Draw("L,same");
+
+  c0->Update();
+
+  theApp.Run();
   return 0;
 }
