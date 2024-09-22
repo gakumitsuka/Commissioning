@@ -15,6 +15,7 @@
 
 #include <TAxis.h>
 #include <TCanvas.h>
+#include <TGaxis.h>
 #include <TGraph.h>
 #include <TH1.h>
 #include <TRint.h>
@@ -55,6 +56,15 @@ int main(int argc,char *argv[])
   /* ROOT initialization */
   int tmp=1;
   TApplication theApp("App",&tmp,argv);
+
+  int fontid = 42;
+  gStyle->SetStatFont(fontid);
+  gStyle->SetLabelFont(fontid,"XYZ");
+  gStyle->SetLabelFont(fontid,"");
+  gStyle->SetTitleFont(fontid,"XYZ");
+  gStyle->SetTitleFont(fontid,"");
+  gStyle->SetTextFont(fontid);
+  gStyle->SetLegendFont(fontid);
   gStyle->SetOptStat(0);
 
   /*
@@ -82,21 +92,29 @@ int main(int argc,char *argv[])
 
   static boost::posix_time::ptime epoch(boost::gregorian::date(1970,  1,  1));
   static boost::posix_time::ptime day0( boost::gregorian::date(2024, 10,  9));
-  static boost::posix_time::ptime day1( boost::gregorian::date(2024, 10, 21));
+  static boost::posix_time::ptime day1( boost::gregorian::date(2024, 10, 22));
   static boost::posix_time::ptime day2( boost::gregorian::date(2024, 11, 29));
   static boost::posix_time::ptime day3( boost::gregorian::date(2024, 12, 27));
 
   const auto cells = ParseCsv(sinput);
 
-  std::vector<double> vsler, viler;
-  std::vector<double> vsher, viher;
-  std::vector<double> vlumh, vluml;
+  std::vector<double> vsler, viler, vbler;
+  std::vector<double> vsher, viher, vbher;
+  std::vector<double> vscol, vbpro, vlumi;
 
   const auto her2ler = 1.83/2.58;
-  const auto Lsph    = 5.0e+31 * 1.0e+6 / (1.0e+34);
-  const auto Lspl    = 4.0e+31 * 1.0e+6 / (1.0e+34);
   const auto nb2346  = 2346.;
   const auto nb393   =  393.;
+
+  auto Lsph = [](const double &mA2)
+              {
+                return (4.77727 * exp(-2.4878 * mA2) + 4.33312) * 1.0e+31;
+              };
+
+  auto Lspl = [](const double &mA2)
+              {
+                return (4.77727 * exp(-2.4878 * mA2) + 4.33312) * 1.0e+31 / (1.0e+34);
+              };
 
   for (const auto& data : cells)
     {
@@ -121,55 +139,156 @@ int main(int argc,char *argv[])
 
       vsler.push_back(sec);  // ref to 1 Jan, 1995
       viler.push_back(iler);
+      vbler.push_back(iler/nb2346 * 1000.);
+
+      vsher.push_back(sec);
+      viher.push_back(iher);
+      vbher.push_back(iher/nb2346 * 1000.);
 
       // Collision starts on Day 1
+      vscol.push_back(sec);
+
       if (ptimed > day1)
         {
-          vsher.push_back(sec);
-          viher.push_back(iher);
-
           // Filling scheme
-          if (iler < 1.4)
-            {
-        	  vlumh.push_back(iler/nb393  * iher/nb393  * Lsph * nb393);
-              vluml.push_back(iler/nb393  * iher/nb393  * Lspl * nb393);
-            }
-          else
-            {
-              vlumh.push_back(iler/nb2346 * iher/nb2346 * Lsph * nb2346);
-              vluml.push_back(iler/nb2346 * iher/nb2346 * Lspl * nb2346);
-            }
+          //          if (iler < 1.4)
+          //            {
+          //              const auto mA2 = iler/nb393  * iher/nb393  * 1.0e+6;
+          //              vlumi.push_back(mA2  * Lsph(mA2) * nb393);
+          //              vluml.push_back(mA2  * Lspl(mA2) * nb393);
+          //            }
+          //          else
+          //            {
+          vbpro.push_back(iler/nb2346 * 1000. * iher/nb2346 * 1000.);
+
+          const auto mA2 = iler/nb2346 * iher/nb2346 * 1.0e+6;
+          vlumi.push_back(mA2  * Lsph(mA2) * nb2346 / 1.0e+35); // normalized to 1e+35
+          //            }
+        }
+      else
+        {
+          vbpro.push_back(-100);
+          vlumi.push_back(-100);
         }
     }
 
-  TCanvas *c0 = new TCanvas("c0", "c0", 1000, 500);
+  //--- Beam current ---
+  TCanvas *c0 = new TCanvas("c0", "c0", 700, 500);
   c0->cd();
 
+  // LER beam current
   auto giler = boost::shared_ptr<TGraph>(new TGraph(vsler.size(), &vsler[0], &viler[0]));
   giler->SetName("");
   giler->SetTitle("2024C");
   giler->SetMarkerStyle(24);
   giler->SetMarkerColor(2);
   giler->SetLineColor(2);
-  giler->Draw("AP");
-  giler->GetHistogram()->SetMinimum( 0.);
-  giler->GetHistogram()->SetMaximum(11.);
+  giler->Draw("AL");
+  giler->GetHistogram()->SetMinimum(0.);
+  giler->GetHistogram()->SetMaximum(3.);
+  auto *ax0 = giler->GetXaxis();
+  ax0->SetLimits(vsler.front()-86400, vsler.back()+86400);
   giler->GetXaxis()->SetTimeDisplay(1);
   giler->GetXaxis()->SetTimeFormat("%b %d");
+  giler->GetXaxis()->SetLabelSize(0.04);
+  giler->GetYaxis()->SetTitle("Beam current (mA)");
+  giler->GetYaxis()->SetTitleSize(0.05);
+  giler->GetYaxis()->SetTitleOffset(0.9);
+  giler->GetYaxis()->CenterTitle(true);
+  giler->GetYaxis()->SetLabelSize(0.05);
 
+  // HER beam current
   auto giher = boost::shared_ptr<TGraph>(new TGraph(vsher.size(), &vsher[0], &viher[0]));
   giher->SetMarkerStyle(24);
   giher->SetMarkerColor(4);
   giher->SetLineColor(4);
-  giher->Draw("P,same");
-
-  auto glumh = boost::shared_ptr<TGraph>(new TGraph(vsher.size(), &vsher[0], &vlumh[0]));
-  glumh->SetMarkerStyle(24);
-  glumh->SetMarkerColor(4);
-  glumh->SetLineColor(4);
-  glumh->Draw("L,same");
+  giher->Draw("L,same");
 
   c0->Update();
+
+  //--- Bunch current ---
+  TCanvas *c1 = new TCanvas("c1", "c1", 700, 500);
+  c1->cd();
+
+  // LER bunch current
+  auto gbler = boost::shared_ptr<TGraph>(new TGraph(vsler.size(), &vsler[0], &vbler[0]));
+  gbler->SetName("");
+  gbler->SetTitle("2024C");
+  gbler->SetMarkerStyle(24);
+  gbler->SetMarkerColor(2);
+  gbler->SetLineColor(2);
+  gbler->Draw("AL");
+  gbler->GetHistogram()->SetMinimum(0.);
+  gbler->GetHistogram()->SetMaximum(1.2);
+  auto *ax1 = gbler->GetXaxis();
+  ax1->SetLimits(vsler.front()-86400, vsler.back()+86400);
+  gbler->GetXaxis()->SetTimeDisplay(1);
+  gbler->GetXaxis()->SetTimeFormat("%b %d");
+  gbler->GetXaxis()->SetLabelSize(0.04);
+  gbler->GetYaxis()->SetTitle("Bunch current (mA)");
+  gbler->GetYaxis()->SetTitleSize(0.05);
+  gbler->GetYaxis()->SetTitleOffset(0.9);
+  gbler->GetYaxis()->CenterTitle(true);
+  gbler->GetYaxis()->SetLabelSize(0.05);
+
+  // HER bunch current
+  auto gbher = boost::shared_ptr<TGraph>(new TGraph(vsher.size(), &vsher[0], &vbher[0]));
+  gbher->SetMarkerStyle(24);
+  gbher->SetMarkerColor(4);
+  gbher->SetLineColor(4);
+  gbher->Draw("L,same");
+
+  // Bunch current product
+  auto gbpro = boost::shared_ptr<TGraph>(new TGraph(vscol.size(), &vscol[0], &vbpro[0]));
+  gbpro->SetLineStyle(7);
+  gbpro->SetLineColor(1);
+  gbpro->Draw("L,same");
+
+  // Bunch current product axis
+  TGaxis *axisr = new TGaxis(vscol.back()+86400, 0.0, vscol.back()+86400, 1.2, 0, 1.2, 510, "+L");
+  axisr->SetTitle("Bunch current product (mA^{2})");
+  axisr->SetTitleSize(0.05);
+  axisr->SetTitleOffset(0.9);
+  axisr->SetTitleFont(42);
+  axisr->CenterTitle(true);
+  axisr->SetLabelSize(0.05);
+  axisr->SetLabelFont(42);
+  axisr->Draw();
+
+  c1->Update();
+
+  //--- Luminosity ---
+  TCanvas *c2 = new TCanvas("c2", "c2", 700, 500);
+  c2->cd();
+
+  // Luminosity
+  auto glumi = boost::shared_ptr<TGraph>(new TGraph(vscol.size(), &vscol[0], &vlumi[0]));
+  glumi->SetName("");
+  glumi->SetTitle("2024C");
+  glumi->SetMarkerStyle(24);
+  glumi->SetMarkerColor(2);
+  glumi->SetLineColor(44);
+  glumi->Draw("AL");
+  glumi->GetHistogram()->SetMinimum(0.);
+  glumi->GetHistogram()->SetMaximum(1.2);
+  auto *ax2 = glumi->GetXaxis();
+  ax2->SetLimits(vscol.front()-86400, vscol.back()+86400);
+  glumi->GetXaxis()->SetTimeDisplay(1);
+  glumi->GetXaxis()->SetTimeFormat("%b %d");
+  glumi->GetXaxis()->SetLabelSize(0.04);
+  glumi->GetYaxis()->SetTitle("Luminosity (10^{35} cm^{-2} s^{-1})");
+  glumi->GetYaxis()->SetTitleSize(0.05);
+  glumi->GetYaxis()->SetTitleOffset(0.9);
+  glumi->GetYaxis()->CenterTitle(true);
+  glumi->GetYaxis()->SetLabelSize(0.05);
+
+  // Bunch current product
+  gbpro->Draw("L,same");
+
+  // Bunch current product axis
+  axisr->Draw();
+
+  c2->Update();
 
   theApp.Run();
   return 0;

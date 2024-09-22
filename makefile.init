@@ -1,10 +1,9 @@
 # ROOT LIBRARY
 LOCALSYS   := ${HOME}/local
 ROOTSYS    := ${LOCALSYS}/src/root/obj
-ROOTCFLAGS := $(shell $(ROOTSYS)/bin/root-config --cflags) $(shell $(LOCALSYS)/bin/bat-config --cflags)
-ROOTGLIBS  := $(shell $(ROOTSYS)/bin/root-config --libs) -lMinuit2 -lEG $(shell $(LOCALSYS)/bin/bat-config --libs)
+ROOTCFLAGS := $(shell $(ROOTSYS)/bin/root-config --cflags)
+ROOTGLIBS  := $(shell $(ROOTSYS)/bin/root-config --libs) -lMinuit2 -lEG
 
 # HPC LIBRARY
 HPCFLAGS := -I${LOCALSYS}/include -I/usr/include -I/usr/include/eigen3 -I${HOME}/local/src/epics/base/include -I${HOME}/local/src/epics/base/include/os/Linux
 HPCLIBS  := -L${LOCALSYS}/lib -L/usr/lib64 -lboost_atomic -lboost_program_options -lboost_filesystem -lboost_system -lboost_regex -lboost_chrono -lboost_serialization
-HPCLIBS  += -lgsl -L/opt/intel/oneapi/2024.1/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5
