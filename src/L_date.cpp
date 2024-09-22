@@ -17,6 +17,7 @@
 #include <TCanvas.h>
 #include <TGaxis.h>
 #include <TGraph.h>
+#include <TLegend.h>
 #include <TH1.h>
 #include <TRint.h>
 #include <TStyle.h>
@@ -189,8 +190,10 @@ int main(int argc,char *argv[])
   auto *ax0 = giler->GetXaxis();
   ax0->SetLimits(vsler.front()-86400, vsler.back()+86400);
   giler->GetXaxis()->SetTimeDisplay(1);
+  giler->GetXaxis()->SetNdivisions(507);
   giler->GetXaxis()->SetTimeFormat("%b %d");
-  giler->GetXaxis()->SetLabelSize(0.04);
+  giler->GetXaxis()->SetLabelSize(0.05);
+  giler->GetXaxis()->SetLabelOffset(0.02);
   giler->GetYaxis()->SetTitle("Beam current (mA)");
   giler->GetYaxis()->SetTitleSize(0.05);
   giler->GetYaxis()->SetTitleOffset(0.9);
@@ -203,6 +206,14 @@ int main(int argc,char *argv[])
   giher->SetMarkerColor(4);
   giher->SetLineColor(4);
   giher->Draw("L,same");
+
+  auto* leg0 = new TLegend(0.1446991,0.6659664,0.4212034,0.8823529,NULL,"brNDC");
+  leg0->AddEntry(giler.get(), "LER", "l");
+  leg0->AddEntry(giher.get(), "HER", "l");
+  leg0->SetBorderSize(0);
+  leg0->SetFillColor(0);
+  leg0->SetTextFont(42);
+  leg0->Draw();
 
   c0->Update();
 
@@ -223,8 +234,10 @@ int main(int argc,char *argv[])
   auto *ax1 = gbler->GetXaxis();
   ax1->SetLimits(vsler.front()-86400, vsler.back()+86400);
   gbler->GetXaxis()->SetTimeDisplay(1);
+  gbler->GetXaxis()->SetNdivisions(507);
   gbler->GetXaxis()->SetTimeFormat("%b %d");
-  gbler->GetXaxis()->SetLabelSize(0.04);
+  gbler->GetXaxis()->SetLabelSize(0.05);
+  gbler->GetXaxis()->SetLabelOffset(0.02);
   gbler->GetYaxis()->SetTitle("Bunch current (mA)");
   gbler->GetYaxis()->SetTitleSize(0.05);
   gbler->GetYaxis()->SetTitleOffset(0.9);
@@ -255,6 +268,15 @@ int main(int argc,char *argv[])
   axisr->SetLabelFont(42);
   axisr->Draw();
 
+  auto* leg1 = new TLegend(0.1446991,0.6659664,0.6346705,0.8823529,NULL,"brNDC");
+  leg1->AddEntry(gbler.get(), "LER", "l");
+  leg1->AddEntry(gbher.get(), "HER", "l");
+  leg1->AddEntry(gbpro.get(), "Bunch current product", "l");
+  leg1->SetBorderSize(0);
+  leg1->SetFillColor(0);
+  leg1->SetTextFont(42);
+  leg1->Draw();
+
   c1->Update();
 
   //--- Luminosity ---
@@ -274,8 +296,10 @@ int main(int argc,char *argv[])
   auto *ax2 = glumi->GetXaxis();
   ax2->SetLimits(vscol.front()-86400, vscol.back()+86400);
   glumi->GetXaxis()->SetTimeDisplay(1);
+  glumi->GetXaxis()->SetNdivisions(507);
   glumi->GetXaxis()->SetTimeFormat("%b %d");
-  glumi->GetXaxis()->SetLabelSize(0.04);
+  glumi->GetXaxis()->SetLabelSize(0.05);
+  glumi->GetXaxis()->SetLabelOffset(0.02);
   glumi->GetYaxis()->SetTitle("Luminosity (10^{35} cm^{-2} s^{-1})");
   glumi->GetYaxis()->SetTitleSize(0.05);
   glumi->GetYaxis()->SetTitleOffset(0.9);
@@ -287,6 +311,14 @@ int main(int argc,char *argv[])
 
   // Bunch current product axis
   axisr->Draw();
+
+  auto* leg2 = new TLegend(0.1446991,0.6659664,0.6848138,0.8823529,NULL,"brNDC");
+  leg2->AddEntry(glumi.get(), "Luminosity", "l");
+  leg2->AddEntry(gbpro.get(), "Bunch current product", "l");
+  leg2->SetBorderSize(0);
+  leg2->SetFillColor(0);
+  leg2->SetTextFont(42);
+  leg2->Draw();
 
   c2->Update();
 
